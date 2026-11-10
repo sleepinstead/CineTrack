@@ -1,0 +1,124 @@
+/*
+ * CineTrack themes — one light, one dark.
+ *
+ *   Paper (light)  true white stock, oxblood-red ink   (default)
+ *   Noir  (dark)   near-black graphite, cinema crimson tuned for dark
+ *
+ * Paper is the original CineTrack theme, restored from src/theme-backup/
+ * with its colours unchanged except a brighter accent (#a32d1e, was
+ * #7a2318). The tokens added since (scrims, shadows, poster edge, strong
+ * border) use the values Paper's components had when they were hard-coded.
+ *
+ * Every theme defines the full token set below; nothing is derived at
+ * runtime. Text pairs meet WCAG AA (4.5:1) and test/theme.test.ts checks
+ * them, with deliberate exceptions: Noir's crimson is tuned for fills
+ * (white text on it passes AA) and reads at about 3.7:1 as text on the dark
+ * ground, which passes for large text but not small; and Paper keeps its
+ * original muted-text and destructive reds, a hair under AA on --muted. Status hues keep one
+ * meaning everywhere: neutral = planned, blue = watching, green = watched.
+ *
+ * Token roles
+ *   --background / --foreground   page ground and body text
+ *   --card                        raised surfaces (panels, popovers, cards)
+ *   --muted                       sunken surfaces (wells, skeletons, chips)
+ *   --secondary                   quiet fills (hover rows, segmented tracks)
+ *   --primary / --accent          brand ink; accent is the data highlight
+ *   --border / --border-strong    hairlines and emphasised dividers
+ *   --ring                        keyboard focus outline
+ *   --scrim / --scrim-soft        modal and drawer backdrops
+ *   --shadow-*                    elevation for popovers, sheets, drawers
+ *   --poster-edge                 hairline that frames poster art
+ *   --status-*-ink                status hue used as text on the page
+ */
+
+/* Paper is also the fallback when no theme attribute is set. */
+:root,
+[data-theme='paper'] {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #14130f;
+  --card: #faf8f3;
+  --card-foreground: #14130f;
+  --muted: #f5f3ed;
+  --muted-foreground: #74705f;
+  --secondary: #f0ede4;
+  --secondary-foreground: #3a3730;
+  --primary: #a32d1e;
+  --primary-foreground: #fdfbf6;
+  --accent: #a32d1e;
+  --accent-foreground: #fdfbf6;
+  --destructive: #dc2626;
+  --destructive-foreground: #fdfbf6;
+  --border: #e3ded1;
+  --border-strong: #cdc6b6;
+  --ring: #a32d1e;
+  --toast-info: #1d4ed8;
+  --toast-success: #15803d;
+  --toast-warning: #a16207;
+  --toast-error: #b91c1c;
+  --toast-on: #ffffff;
+  --status-planned: #52525b;
+  --status-planned-foreground: #ffffff;
+  --status-planned-ink: #52525b;
+  --status-watching: #2563eb;
+  --status-watching-foreground: #ffffff;
+  --status-watching-ink: #1d4ed8;
+  --status-watched: #15803d;
+  --status-watched-foreground: #ffffff;
+  --status-watched-ink: #166534;
+  --scrim: rgba(20, 19, 15, 0.65);
+  --scrim-soft: rgba(20, 19, 15, 0.42);
+  --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.22);
+  --shadow-sheet: 0 30px 90px -20px rgba(0, 0, 0, 0.65);
+  --shadow-drawer: -20px 0 48px rgba(0, 0, 0, 0.24);
+  --poster-edge: rgba(20, 19, 15, 0.14);
+}
+
+[data-theme='noir'] {
+  color-scheme: dark;
+  --background: #0e0e10;
+  --foreground: #f4f2ee;
+  --card: #17171a;
+  --card-foreground: #f4f2ee;
+  --muted: #1b1b1e;
+  --muted-foreground: #a8a6ad;
+  --secondary: #232327;
+  --secondary-foreground: #d9d6d0;
+  --primary: #d62d48;
+  --primary-foreground: #ffffff;
+  --accent: #d62d48;
+  --accent-foreground: #ffffff;
+  --destructive: #f47a6e;
+  --destructive-foreground: #1a0907;
+  --border: #26262a;
+  --border-strong: #3a3a3f;
+  --ring: #d62d48;
+  --toast-info: #8fb3f3;
+  --toast-success: #7ccfa2;
+  --toast-warning: #f0c76a;
+  --toast-error: #f79c92;
+  --toast-on: #0e0e10;
+  --status-planned: #a3a0a8;
+  --status-planned-foreground: #0e0e10;
+  --status-planned-ink: #b0adb5;
+  --status-watching: #7fa7f0;
+  --status-watching-foreground: #0a1120;
+  --status-watching-ink: #8fb3f3;
+  --status-watched: #6cc795;
+  --status-watched-foreground: #07170e;
+  --status-watched-ink: #7ccfa2;
+  --scrim: rgba(4, 3, 6, 0.7);
+  --scrim-soft: rgba(4, 3, 6, 0.5);
+  --shadow-pop: 0 0 0 1px rgba(255, 240, 240, 0.05), 0 16px 40px -8px rgba(0, 0, 0, 0.7);
+  --shadow-sheet: 0 0 0 1px rgba(255, 240, 240, 0.06), 0 40px 100px -20px rgba(0, 0, 0, 0.9);
+  --shadow-drawer: -1px 0 0 rgba(255, 240, 240, 0.05), -28px 0 64px -12px rgba(0, 0, 0, 0.7);
+  --poster-edge: rgba(244, 242, 238, 0.09);
+}
+
+/* Shared tokens, derived from each theme's own colours. */
+:root {
+  --radius: 2px;
+  /* Form-control borders need 3:1 against the page (WCAG 1.4.11). */
+  --input: color-mix(in srgb, var(--foreground) 48%, var(--background));
+  --selection: color-mix(in srgb, var(--primary) 26%, transparent);
+}

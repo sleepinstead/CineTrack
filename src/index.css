@@ -1,0 +1,564 @@
+@import 'tailwindcss';
+
+/* Theme tokens: four themes, one token contract. */
+@import './styles/themes.css';
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-status-planned: var(--status-planned);
+  --color-status-planned-foreground: var(--status-planned-foreground);
+  --color-status-watching: var(--status-watching);
+  --color-status-watching-foreground: var(--status-watching-foreground);
+  --color-status-watched: var(--status-watched);
+  --color-status-watched-foreground: var(--status-watched-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ring: var(--ring);
+  --radius-sm: var(--radius);
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+html {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: var(--font-sans);
+}
+
+html {
+  overflow-anchor: none;
+}
+body {
+  margin: 0;
+  overflow-anchor: none;
+  background: var(--background);
+}
+
+body {
+  transition: background-color 240ms ease, color 240ms ease;
+}
+
+::selection {
+  background: var(--selection);
+  color: var(--foreground);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* View headings take focus only so screen readers announce the new page;
+   they aren't controls, so they don't need a ring. */
+#main-content h1[tabindex='-1']:focus {
+  outline: none;
+}
+
+html {
+  /* Keep focused/anchored content clear of the sticky header (WCAG 2.4.11). */
+  scroll-padding-top: 6rem;
+}
+
+/* Scrollbars stay hidden until the surface is actively scrolling. */
+.quiet-scroll {
+  scrollbar-width: none;
+}
+.quiet-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.quiet-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+.quiet-scroll:hover::-webkit-scrollbar-thumb,
+.quiet-scroll:active::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--foreground) 26%, transparent);
+}
+
+.rule-label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.cinema-footer {
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+  border-top: 1px solid var(--border);
+}
+
+.cinema-footer-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: clamp(52px, 4.2vw, 76px);
+  gap: 16px;
+  padding-inline: clamp(18px, 2.3vw, 48px);
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: clamp(11px, 0.9vw, 14px);
+}
+
+@media (max-width: 640px) {
+  .cinema-footer-topbar {
+    min-height: 52px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    padding-block: 14px;
+    font-size: 10px;
+  }
+}
+
+/* The outer card is the stable hit area; only __body moves, so the lifted
+   card never slides out from under the cursor. */
+.poster-card-3d {
+  --poster-tilt-x: 0deg;
+  --poster-tilt-y: 0deg;
+  position: relative;
+  z-index: 0;
+}
+
+.poster-card-3d__body {
+  display: block;
+  height: 100%;
+  /* No transform at rest: hundreds of idle 3D layers cost GPU memory. */
+  transition: transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Lift and tilt only for a real hovering pointer: on touch, :hover sticks
+   after a tap and left cards stranded mid-air. */
+@media (hover: hover) and (pointer: fine) {
+  .poster-card-3d:hover {
+    z-index: 2;
+  }
+
+  .poster-card-3d:hover > .poster-card-3d__body {
+    transform: perspective(900px) translateY(-5px) rotateX(var(--poster-tilt-x)) rotateY(var(--poster-tilt-y)) scale3d(1.025, 1.025, 1.025);
+  }
+}
+
+/* Keyboard focus lifts the card flat. Mouse clicks leave focus behind
+   without :focus-visible, so a clicked card no longer stays lifted. */
+.poster-card-3d:has(:focus-visible) {
+  z-index: 2;
+}
+
+.poster-card-3d:has(:focus-visible) > .poster-card-3d__body {
+  transform: perspective(900px) translateY(-5px) scale3d(1.025, 1.025, 1.025);
+}
+
+.poster-card-3d[data-motion='off'] > .poster-card-3d__body {
+  transform: none;
+  transition: none;
+}
+
+.poster-card-3d__art {
+  border: 1px solid var(--poster-edge);
+}
+
+/* Rounded posters preference */
+[data-round-posters='true'] .poster-card-3d__art,
+[data-round-posters='true'] [data-poster-surface],
+[data-round-posters='true'] [data-poster-surface] img,
+[data-round-posters='true'] .poster-rounded {
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poster-card-3d > .poster-card-3d__body {
+    transform: none !important;
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Motion. Archival restraint: nothing bounces, nothing slides far.
+   Sheets settle, rules draw themselves, ink fades up. One easing
+   curve and two durations do almost all of the work.
+   ------------------------------------------------------------------ */
+
+:root {
+  --ease-sheet: cubic-bezier(0.22, 0.61, 0.28, 1);
+  --dur-quick: 200ms;
+  --dur-drawer: 320ms;
+  --dur-settle: 460ms;
+}
+
+@keyframes ct-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ct-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Section rules draw left-to-right like a ruling pen. */
+@keyframes ct-rule {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Plates uncover smoothly: gentle upward drift with photographic fade */
+@keyframes ct-plate {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ct-plate-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ct-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes ct-tick {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Tactile stamp settle when marking an episode. */
+@keyframes ct-stamp {
+  from {
+    transform: scale(0.95);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Pen-stroke checkmark: draws left-to-right like a ruling pen. */
+@keyframes ct-check-draw {
+  from {
+    stroke-dashoffset: 24;
+    opacity: 0.2;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+/* Growing bars/meters: paint out from the left on first paint. */
+@keyframes ct-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes ct-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+@keyframes ct-toast-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ct-toast-out {
+  to { opacity: 0; transform: translateY(4px); }
+}
+
+.animate-rise {
+  animation: ct-rise var(--dur-settle) var(--ease-sheet) both;
+}
+.animate-fade {
+  animation: ct-fade var(--dur-settle) var(--ease-sheet) both;
+}
+.animate-plate {
+  animation: ct-plate 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-plate-fade {
+  animation: ct-plate-fade 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-tick {
+  animation: ct-tick 380ms var(--ease-sheet) both;
+}
+.animate-stamp {
+  animation: ct-stamp var(--dur-quick) var(--ease-sheet) both;
+}
+.animate-check-draw {
+  stroke-dasharray: 24;
+  animation: ct-check-draw 220ms var(--ease-sheet) both;
+}
+.animate-rule {
+  transform-origin: left;
+  animation: ct-rule 620ms var(--ease-sheet) both;
+}
+/* ------------------------------------------------------------------
+   Landing page: an opening-titles sequence. The posters drift behind the
+   main title like the opening shot, and each credit settles into place as
+   it scrolls into frame. Content is visible by default; motion is added
+   only where the browser supports scroll timelines and motion is welcome.
+   The curved poster row animates itself (TiltedGridHero, Web Animations).
+   ------------------------------------------------------------------ */
+/* Opacity and transform only: both run on the compositor, so scrolling
+   never repaints text (an animated blur did, every frame). */
+@keyframes ct-credit {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 28px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .credit-reveal {
+      animation: ct-credit linear both;
+      animation-timeline: view();
+      /* Settled after a fixed travel, so tall blocks never sit blurred while read. */
+      animation-range: entry 0% entry 280px;
+    }
+    .chart-scroll-draw {
+      stroke-dasharray: 1;
+      animation: ct-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 20% entry 100%;
+    }
+  }
+}
+
+/* Chart line draws itself left to right (paths use pathLength=1). */
+@keyframes ct-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.chart-draw {
+  stroke-dasharray: 1;
+  animation: ct-draw 900ms var(--ease-sheet) both;
+}
+.animate-grow {
+  transform-origin: left;
+  animation: ct-grow 700ms var(--ease-sheet) both;
+}
+
+.toast-item {
+  background: var(--foreground);
+  color: var(--background);
+  animation: ct-toast-in 180ms var(--ease-sheet) both;
+}
+.toast-item[data-kind='success'] { background: var(--toast-success); color: var(--toast-on); }
+.toast-item[data-kind='warning'] { background: var(--toast-warning); color: var(--toast-on); }
+.toast-item[data-kind='error']   { background: var(--toast-error);   color: var(--toast-on); }
+.toast-item[data-leaving='true'] { animation: ct-toast-out 180ms ease-in both; }
+
+/* Page-level entrance: the whole sheet settles, children follow in order. */
+.page-enter {
+  animation: ct-fade 260ms var(--ease-sheet) both;
+}
+.page-enter > * > * {
+  animation: ct-rise var(--dur-settle) var(--ease-sheet) both;
+}
+.page-enter > * > *:nth-child(1) {
+  animation-delay: 20ms;
+}
+.page-enter > * > *:nth-child(2) {
+  animation-delay: 70ms;
+}
+.page-enter > * > *:nth-child(3) {
+  animation-delay: 120ms;
+}
+.page-enter > * > *:nth-child(4) {
+  animation-delay: 170ms;
+}
+.page-enter > * > *:nth-child(5) {
+  animation-delay: 210ms;
+}
+.page-enter > * > *:nth-child(n + 6) {
+  animation-delay: 250ms;
+}
+
+/* Skeleton stand-ins while TMDb pages are in flight. */
+.shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    var(--secondary) 50%,
+    var(--muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: ct-sweep 2000ms ease-in-out infinite;
+}
+
+/* Underline that draws in on hover rather than snapping on. */
+.link-draw {
+  position: relative;
+}
+.link-draw::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform var(--dur-quick) var(--ease-sheet);
+}
+.link-draw:hover::after,
+.link-draw:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* Presses register with a hair of give — no bounce. */
+.press {
+  transition: transform 120ms var(--ease-sheet), opacity 120ms var(--ease-sheet),
+    background-color var(--dur-quick) ease, border-color var(--dur-quick) ease,
+    color var(--dur-quick) ease;
+}
+.press:active {
+  transform: translateY(1px);
+}
+
+/* Modal mechanics: the backdrop recedes while the sheet develops — a tight
+   rise with a photographic settle, never a slide or a bounce. One contract
+   for every dialog, so entrance and exit always mirror each other. The
+   hidden surfaces are also made inert, so the tail of an exit never
+   swallows clicks meant for the page beneath. */
+.modal-backdrop {
+  opacity: 0;
+  transition: opacity var(--dur-quick) ease-out;
+}
+.modal-backdrop[data-open='true'] {
+  opacity: 1;
+}
+.modal-sheet {
+  opacity: 0;
+  transform: translate3d(0, 12px, 0) scale(0.965);
+  transition: opacity var(--dur-quick) ease-out, transform var(--dur-quick) cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-sheet[data-open='true'] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+/* Side drawers slide on the same contract as the sheets: one deceleration
+   curve, off-screen resting pose, and an exit that mirrors the entrance.
+   Snappier than the modal settle — a drawer covers a lot of distance fast
+   without ever feeling like it snaps shut. */
+.drawer-sheet {
+  transform: translate3d(100%, 0, 0);
+  transition: transform var(--dur-drawer) var(--ease-sheet);
+  will-change: transform;
+}
+.drawer-sheet[data-open='true'] {
+  transform: translate3d(0, 0, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  .shimmer {
+    animation: none;
+    background: var(--muted);
+  }
+}
+
+@media (min-width: 1024px) {
+  .poster-grid-dynamic {
+    grid-template-columns: repeat(var(--grid-desktop-cols, 6), minmax(0, 1fr)) !important;
+  }
+}
+
+/* Offscreen posters — content-visibility disabled for Discover to prevent scroll anchoring jumps on add */
+.poster-grid-dynamic > * {
+  /* content-visibility: auto; */
+  /* contain-intrinsic-size: 300px 450px; */
+}
+.poster-grid-dynamic {
+  overflow-anchor: none;
+}
+
+/* Row-based entrance stagger: unified, coherent rows without jagged horizontal tearing */
+.poster-grid-dynamic > *:nth-child(-n+7) {
+  animation-delay: 0ms;
+}
+.poster-grid-dynamic > *:nth-child(n+8):nth-child(-n+14) {
+  animation-delay: 45ms;
+}
+.poster-grid-dynamic > *:nth-child(n+15) {
+  animation-delay: 90ms;
+}

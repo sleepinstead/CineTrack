@@ -1,0 +1,250 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { img, isNotFoundError, person, personCredits, type MediaType, type PersonCredit, type PersonDetail } from '../lib/tmdb'
+import { useSettings } from '../lib/settings'
+import { CloseButton, PosterTilt, Spinner, useFocusTrap } from './ui'
+import { ErrorState, NotFound } from './Errors'
+
+const creditTitle = (c: PersonCredit) => c.title ?? c.name ?? 'Untitled'
+/** First billed role only — full slash-lists ("A / B / C (Voice)") blow out rows. */
+const shortRole = (c: PersonCredit) => (c.character ?? '').split('/')[0]?.trim() ?? ''
+
+function formatBirthday(raw: string | null): string | null {
+  if (!raw) return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw)
+  if (!m) return raw
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+export default function CastDetail({
+  personId,
+  onClose,
+  onOpenTitle,
+}: {
+  personId: number
+  onClose: () => void
+  onOpenTitle: (type: MediaType, id: number) => void
+}) {
+  const [data, setData] = useState<PersonDetail | null>(null)
+  const [credits, setCredits] = useState<PersonCredit[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [notFound, setNotFound] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [shown, setShown] = useState(false)
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  useFocusTrap(boxRef)
+  const closeTimer = useRef<number | null>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const metadataLanguage = useSettings().settings.metadataLanguage
+
+  const close = useCallback(() => {
+    setShown(false)
+    if (closeTimer.current) window.clearTimeout(closeTimer.current)
+    closeTimer.current = window.setTimeout(() => onCloseRef.current(), 200)
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let live = true
+    setData(null)
+    setCredits([])
+    setError(null)
+    setNotFound(false)
+    Promise.all([person(personId, { signal: controller.signal }), personCredits(personId, { signal: controller.signal })])
+      .then(([p, c]) => {
+        if (!live) return
+        setData(p)
+        setCredits([...(c.cast ?? [])].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0)).slice(0, 12))
+      })
+      .catch((e) => {
+        if (!live) return
+        setError(e instanceof Error ? e.message : 'Failed to load cast file')
+        setNotFound(isNotFoundError(e))
+      })
+    return () => {
+      live = false
+      controller.abort()
+    }
+  }, [personId, attempt, metadataLanguage])
+
+  useEffect(() => {
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setShown(true))
+    })
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        close()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+      window.removeEventListener('keydown', onKey, true)
+    }
+  }, [close])
+
+  useEffect(
+    () => () => {
+      if (closeTimer.current) window.clearTimeout(closeTimer.current)
+    },
+    [],
+  )
+
+  const born = data ? formatBirthday(data.birthday) : null
+  const facts = data
+    ? [
+        data.known_for_department,
+        born ? `Born ${born}${data.place_of_birth ? ` · ${data.place_of_birth}` : ''}` : data.place_of_birth,
+        data.deathday ? `Died ${formatBirthday(data.deathday) ?? data.deathday}` : null,
+      ].filter(Boolean)
+    : []
+
+  return createPortal((
+    <div
+      className={`modal-backdrop fixed inset-0 z-[70] flex items-center justify-center bg-[var(--scrim)] p-3 sm:p-4 ${shown ? '' : 'pointer-events-none'}`}
+      data-open={shown}
+      onClick={close}
+    >
+      <div
+        ref={boxRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={data ? `Cast file — ${data.name}` : 'Cast file'}
+        className="modal-sheet flex h-[min(82vh,600px)] w-full max-w-[560px] flex-col border border-border bg-background shadow-[var(--shadow-sheet)]"
+        data-open={shown}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4.5 py-3">
+          <div className="min-w-0 pr-2">
+            <span className="rule-label block text-[var(--primary)] text-[10px]">Cast file</span>
+            <span className="mt-0.5 block truncate font-display text-[18px] leading-tight">{data?.name ?? '…'}</span>
+          </div>
+          <CloseButton onClick={close} label="Close cast file" />
+        </header>
+
+        <div className="quiet-scroll min-h-0 flex-1 overflow-y-auto px-4.5 py-4">
+          {error && !data && (notFound ? (
+            <NotFound
+              size="panel"
+              title="This person isn’t on TMDb"
+              message="Their profile may have been removed or merged with another."
+              actions={[{ label: 'Close', onClick: close }]}
+            />
+          ) : (
+            <ErrorState
+              size="panel"
+              title="This profile couldn’t load"
+              message={error}
+              actions={[
+                { label: 'Retry', onClick: () => setAttempt((a) => a + 1) },
+                { label: 'Close', onClick: close },
+              ]}
+            />
+          ))}
+          {!error && !data && (
+            <div className="flex items-center justify-center py-16">
+              <Spinner size={30} />
+            </div>
+          )}
+          {data && (
+            <div className="animate-fade">
+              <div className="flex gap-4">
+                <div className="w-[112px] shrink-0 overflow-hidden border border-border bg-muted">
+                  {img(data.profile_path, 'w185') ? (
+                    <img
+                      src={img(data.profile_path, 'w185')!}
+                      alt={data.name}
+                      loading="lazy"
+                      decoding="async"
+                      width={185}
+                      height={278}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex aspect-[2/3] w-full items-center justify-center font-display text-[34px] text-muted-foreground">
+                      {data.name.slice(0, 1)}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-display text-[26px] leading-tight tracking-tight">{data.name}</h3>
+                  {facts.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {facts.map((f, i) => (
+                        <li key={i} className="font-sans text-[11px] tracking-[0.06em] text-muted-foreground">
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+              {data.biography ? (
+                <p className="mt-4 text-[13px] leading-relaxed text-secondary-foreground">{data.biography}</p>
+              ) : (
+                <p className="rule-label mt-4">No biography on file</p>
+              )}
+              {credits.length > 0 && (
+                <div className="mt-5 border-t border-border pt-4">
+                  <span className="rule-label block text-[var(--primary)] text-[10px]">Known for</span>
+                  <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
+                    {credits.map((c) => {
+                      const type: MediaType = c.media_type ?? (c.title ? 'movie' : 'tv')
+                      return (
+                        <PosterTilt
+                          key={`${type}-${c.id}`}
+                          className="w-full"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onOpenTitle(type, c.id)}
+                            aria-label={`Open ${creditTitle(c)}`}
+                            className="press group w-full text-left"
+                          >
+                            <span data-poster-surface className="poster-card-3d__art relative block aspect-[2/3] w-full overflow-hidden bg-muted">
+                              {img(c.poster_path, 'w185') ? (
+                                <img
+                                  src={img(c.poster_path, 'w185')!}
+                                  alt=""
+                                  loading="lazy"
+                                  decoding="async"
+                                  width={185}
+                                  height={278}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <span className="flex h-full items-center justify-center p-1 text-center font-display text-[13px] text-muted-foreground">
+                                  {creditTitle(c)}
+                                </span>
+                              )}
+                            </span>
+                            <span className="poster-card-3d__meta block">
+                              <span className="mt-1.5 block truncate font-display text-[14px] leading-tight group-hover:text-[var(--primary)]">
+                                {creditTitle(c)}
+                              </span>
+                              <span className="rule-label mt-0.5 block truncate">
+                                {shortRole(c) || '—'}
+                              </span>
+                            </span>
+                          </button>
+                        </PosterTilt>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  ), document.body)
+}

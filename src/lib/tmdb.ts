@@ -1,0 +1,456 @@
+import { currentSettings, LANGUAGES } from './settings'
+import { isSafeImagePath, type MediaType } from './entry'
+
+export { isSafeImagePath } from './entry'
+export type { MediaType } from './entry'
+
+const BASE = '/api/tmdb'
+
+export type TmdbTitle = {
+  id: number
+  media_type?: MediaType
+  title?: string
+  name?: string
+  poster_path: string | null
+  backdrop_path: string | null
+  overview: string
+  vote_average: number
+  release_date?: string
+  first_air_date?: string
+  genre_ids?: number[]
+}
+
+export type Episode = {
+  id: number
+  episode_number: number
+  season_number: number
+  name: string
+  overview: string
+  still_path: string | null
+  air_date: string | null
+  runtime: number | null
+}
+
+export type SeasonSummary = {
+  id: number
+  season_number: number
+  name: string
+  episode_count: number
+  air_date: string | null
+  poster_path: string | null
+}
+
+export type TitleDetail = TmdbTitle & {
+  runtime?: number
+  episode_run_time?: number[]
+  number_of_seasons?: number
+  number_of_episodes?: number
+  status?: string
+  tagline?: string
+  imdb_id?: string | null
+  external_ids?: { imdb_id?: string | null }
+  genres?: { id: number; name: string }[]
+  seasons?: SeasonSummary[]
+  credits?: { cast: { id: number; name: string; character: string; profile_path: string | null }[] }
+}
+
+const MAX_CACHE_ENTRIES = 200
+const MAX_CACHE_BYTES = 16 * 1024 * 1024
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes for client, server has 24h
+type CacheEntry = { promise: Promise<unknown>; expires: number; bytes: number }
+const clientCache = new Map<string, CacheEntry>()
+let clientCacheBytes = 0
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+type RequestOptions = { signal?: AbortSignal }
+
+function asObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('TMDb returned an invalid response')
+  return value as Record<string, unknown>
+}
+
+function safeImagePath(value: unknown): string | null {
+  return isSafeImagePath(value) ? value : null
+}
+
+function normalizeTitle(value: unknown): TmdbTitle | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+  const id = raw.id
+  if (!Number.isSafeInteger(id) || (id as number) <= 0) return null
+  const mediaType = raw.media_type === 'movie' || raw.media_type === 'tv' ? raw.media_type : undefined
+  const title = typeof raw.title === 'string' ? raw.title.slice(0, 500) : undefined
+  const name = typeof raw.name === 'string' ? raw.name.slice(0, 500) : undefined
+  const overview = typeof raw.overview === 'string' ? raw.overview.slice(0, 10000) : ''
+  const voteAverage =
+    typeof raw.vote_average === 'number' && Number.isFinite(raw.vote_average)
+      ? Math.min(10, Math.max(0, raw.vote_average))
+      : 0
+  const result: TmdbTitle = {
+    id: id as number,
+    media_type: mediaType,
+    title,
+    name,
+    poster_path: safeImagePath(raw.poster_path),
+    backdrop_path: safeImagePath(raw.backdrop_path),
+    overview,
+    vote_average: voteAverage,
+  }
+  if (typeof raw.release_date === 'string') result.release_date = raw.release_date.slice(0, 20)
+  if (typeof raw.first_air_date === 'string') result.first_air_date = raw.first_air_date.slice(0, 20)
+  if (Array.isArray(raw.genre_ids)) result.genre_ids = raw.genre_ids.filter((x): x is number => Number.isSafeInteger(x)).slice(0, 100)
+  return result
+}
+
+function normalizePage(value: unknown): Page {
+  const raw = asObject(value)
+  if (!Array.isArray(raw.results)) throw new Error('TMDb returned an invalid results list')
+  const page = typeof raw.page === 'number' && Number.isSafeInteger(raw.page) ? raw.page : 1
+  const totalPages = typeof raw.total_pages === 'number' && Number.isSafeInteger(raw.total_pages) ? raw.total_pages : page
+  return {
+    ...raw,
+    page,
+    total_pages: Math.max(1, Math.min(1000, totalPages)),
+    results: raw.results.map(normalizeTitle).filter((x): x is TmdbTitle => x !== null).slice(0, 100),
+  }
+}
+
+async function readResponseText(response: Response): Promise<string> {
+  if (!response.body) {
+    const text = await response.text()
+    if (new TextEncoder().encode(text).byteLength > MAX_RESPONSE_BYTES) throw new Error('TMDb response was too large')
+    return text
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > MAX_RESPONSE_BYTES) {
+        await reader.cancel()
+        throw new Error('TMDb response was too large')
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  let out = ''
+  for (const chunk of chunks) out += decoder.decode(chunk, { stream: true })
+  return out + decoder.decode()
+}
+
+/** Test-only: drop the client cache so tests never share inflight responses. */
+export function __clearTmdbCache() {
+  clientCache.clear()
+  clientCacheBytes = 0
+}
+
+function getCache(url: string): Promise<unknown> | undefined {
+  const e = clientCache.get(url)
+  if (!e) return undefined
+  if (e.expires < Date.now()) {
+    deleteCache(url)
+    return undefined
+  }
+  // Promote on hit so hot entries survive eviction.
+  clientCache.delete(url)
+  clientCache.set(url, e)
+  return e.promise
+}
+
+function deleteCache(url: string) {
+  const entry = clientCache.get(url)
+  if (!entry) return
+  clientCache.delete(url)
+  clientCacheBytes = Math.max(0, clientCacheBytes - entry.bytes)
+}
+
+function setCache(url: string, promise: Promise<unknown>) {
+  // Sweep expired entries first so dead weight never evicts live ones.
+  const now = Date.now()
+  for (const [k, v] of clientCache) {
+    if (v.expires < now) deleteCache(k)
+  }
+  deleteCache(url)
+  const entry: CacheEntry = { promise, expires: Date.now() + CACHE_TTL_MS, bytes: 0 }
+  clientCache.set(url, entry)
+  void promise.then(
+    (value) => {
+      if (clientCache.get(url) !== entry) return
+      try {
+        entry.bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength
+        clientCacheBytes += entry.bytes
+      } catch {
+        deleteCache(url)
+        return
+      }
+      while (clientCache.size > MAX_CACHE_ENTRIES || clientCacheBytes > MAX_CACHE_BYTES) {
+        const first = clientCache.keys().next().value as string | undefined
+        if (!first) break
+        deleteCache(first)
+      }
+    },
+    () => deleteCache(url),
+  )
+}
+
+/** Allowlisted UI locale for TMDb metadata; unknown values fall back to en-US. */
+function sanitizeLanguage(lang: unknown): string {
+  return typeof lang === 'string' && LANGUAGES.some((l) => l.id === lang) ? lang : 'en-US'
+}
+
+/** A TMDb (or proxy) response with a non-2xx status. */
+export class TmdbError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'TmdbError'
+    this.status = status
+  }
+}
+
+/** True when TMDb has no record at all (a deleted title, a bad id): not worth retrying. */
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof TmdbError && error.status === 404
+}
+
+export async function tmdb<T>(  path: string,
+  params: Record<string, string | number> = {},
+  opts: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<T> {
+  // Allowlist params to prevent injection
+  const allowedKeys = new Set([
+    'language',
+    'query',
+    'page',
+    'include_adult',
+    'sort_by',
+    'with_genres',
+    'vote_count.gte',
+    'append_to_response',
+  ])
+  const filtered: Record<string, string> = { language: sanitizeLanguage(currentSettings().metadataLanguage) }
+  for (const [k, v] of Object.entries(params)) {
+    if (!allowedKeys.has(k)) continue
+    const val = String(v)
+    if (val.length > 500) continue
+    filtered[k] = val
+  }
+
+  const search = new URLSearchParams(filtered)
+  const qs = search.toString() ? `?${search.toString()}` : ''
+  const url = `${BASE}${path}${qs}`
+
+  const timeoutMs = opts.timeoutMs ?? 10000
+  const callerSignal = opts.signal
+
+  const cached = getCache(url)
+  if (cached) return raceAbort(cached as Promise<T>)
+
+  // Detach a single caller on abort without killing the shared fetch other
+  // callers may be waiting on — aborting shared work is what wedged detail
+  // views when an effect cleanup fired while a remount reused the promise.
+  function raceAbort(shared: Promise<T>): Promise<T> {
+    if (!callerSignal) return shared
+    if (callerSignal.aborted) return Promise.reject(new Error('Request cancelled'))
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () => reject(new Error('Request cancelled'))
+      callerSignal.addEventListener('abort', onAbort, { once: true })
+      shared.then(
+        (v) => {
+          callerSignal.removeEventListener('abort', onAbort)
+          resolve(v)
+        },
+        (e) => {
+          callerSignal.removeEventListener('abort', onAbort)
+          reject(e)
+        },
+      )
+    })
+  }
+
+  const promise = (async () => {
+    // Offline fast-fail
+    if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('You appear offline — check your connection')
+    for (let attempt = 0; attempt < 2; attempt++) {
+      // Timeout-only controller: only genuine timeouts abort shared work.
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), timeoutMs)
+      let res: Response
+      try {
+        res = await fetch(url, { signal: controller.signal, redirect: 'error' })
+        const text = await readResponseText(res)
+        clearTimeout(timeout)
+
+        if (!res.ok) {
+          const ct = res.headers.get('content-type') || ''
+          let body: unknown = {}
+          try {
+            if (ct.toLowerCase().includes('application/json')) body = JSON.parse(text)
+            else body = { status_message: text.slice(0, 500) }
+          } catch {}
+          // Upstream/proxy error strings are untrusted: strip control chars and
+          // cap length before they flow into Error.message (and from there toasts).
+          const rawMsg = (body as { status_message?: unknown; error?: unknown })?.status_message ?? (body as { error?: unknown })?.error
+          const msg = sanitizeUpstreamText(rawMsg, 300)
+          const retry = res.headers.get('retry-after')
+          throw new TmdbError(msg ?? `TMDb request failed (${res.status})${retry ? ` — retry after ${retry}s` : ''}`, res.status)
+        }
+
+        const ct = res.headers.get('content-type') || ''
+        if (!ct.includes('application/json')) throw new Error(`Unexpected TMDb response: ${sanitizeUpstreamText(text, 200) ?? 'non-JSON body'}`)
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(text)
+        } catch {
+          throw new Error('TMDb returned malformed JSON')
+        }
+        return asObject(parsed) as T
+      } catch (e) {
+        clearTimeout(timeout)
+        const err = e as Error
+        // Retry once, and cover both failure shapes: our own deadline (AbortError)
+        // and a dropped connection (fetch rejects with a TypeError). A killed dev
+        // server or a reset socket was a permanent-looking error until this.
+        if (attempt === 0 && (err.name === 'AbortError' || err instanceof TypeError)) continue
+        if (err.name === 'AbortError') throw new Error('TMDb request timed out — please retry', { cause: e })
+        throw e
+      }
+    }
+    throw new Error('TMDb request timed out — please retry')
+  })()
+
+  const handled = promise.catch((err) => {
+    deleteCache(url)
+    throw err
+  })
+
+  // Don't cache 4xx/5xx — only cache on success, so wrap
+  const cachedPromise = handled.then((v) => v) as Promise<unknown>
+  // Insert after creating, but will be removed on rejection via catch above
+  setCache(url, cachedPromise)
+  // If it rejects, the catch above already deleted; keep map clean.
+  // Guard the stored derived promise too — consumers attach to `handled`
+  // via raceAbort, so without this every failure reports unhandled.
+  cachedPromise.catch(() => {})
+  handled.catch(() => {})
+  return raceAbort(handled as Promise<T>)
+}
+
+/** Untrusted text from the network (TMDb or a look-alike proxy): printable
+ *  characters only, hard-capped, before it can reach an Error message/toast. */
+function sanitizeUpstreamText(value: unknown, max = 300): string | undefined {
+  if (typeof value !== 'string') return undefined
+  // eslint-disable-next-line no-control-regex -- stripping control characters is the point
+  const cleaned = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim().slice(0, max)
+  return cleaned || undefined
+}
+
+// Only allow TMDb-relative paths; reject data:, blob:, http, and traversal
+export const img = (path: string | null | undefined, size: 'w185' | 'w342' | 'w500' | 'w780' | 'original' = 'w342') => {
+  if (!path || !isSafeImagePath(path)) return null
+  return `https://image.tmdb.org/t/p/${size}${path}`
+}
+
+export const titleOf = (t: TmdbTitle) => t.title ?? t.name ?? 'Untitled'
+export const yearOf = (t: TmdbTitle) => (t.release_date ?? t.first_air_date ?? '').slice(0, 4)
+
+export type Page = { results: TmdbTitle[]; page: number; total_pages: number }
+
+export const searchMulti = (query: string, page = 1, opts?: RequestOptions) => {
+  const q = query.trim().slice(0, 100)
+  if (!q) return Promise.resolve({ results: [], page: 1, total_pages: 1 } as Page)
+  return tmdb<Page>('/search/multi', { query: q, include_adult: String(currentSettings().includeAdult), page }, opts).then((r) => {
+    const normalized = normalizePage(r)
+    return {
+      ...normalized,
+      results: normalized.results.filter((x) => x.media_type === 'movie' || x.media_type === 'tv'),
+    }
+  })
+}
+
+export const trending = (type: 'all' | MediaType, window: 'day' | 'week' = 'week', page = 1, opts?: RequestOptions) => {
+  if (page < 1 || page > 1000) page = 1
+  return tmdb<Page>(`/trending/${type}/${window}`, { page }, opts).then(normalizePage)
+}
+
+export const recommendations = (type: MediaType, id: number, page = 1, opts?: RequestOptions) => {
+  if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
+  if (page < 1 || page > 1000) page = 1
+  return tmdb<Page>(`/${type}/${id}/recommendations`, { page }, opts).then(normalizePage)
+}
+
+export const discover = (
+  type: MediaType,
+  opts: { sort_by?: string; with_genres?: string; page?: number; 'vote_count.gte'?: number } = {},
+  requestOpts?: RequestOptions,
+) =>
+  tmdb<Page>(`/discover/${type}`, {
+    page: 1,
+    'vote_count.gte': 50,
+    include_adult: String(currentSettings().includeAdult),
+    ...opts,
+  }, requestOpts).then(normalizePage)
+export const details = (type: MediaType, id: number, opts?: { signal?: AbortSignal }) => {
+  if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
+  return tmdb<TitleDetail>(`/${type}/${id}`, { append_to_response: 'credits,external_ids' }, opts)
+}
+
+export const season = (id: number, seasonNumber: number, opts?: { signal?: AbortSignal }) => {
+  if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
+  if (!Number.isInteger(seasonNumber) || seasonNumber < 0 || seasonNumber > 1000) return Promise.reject(new Error('Invalid season number'))
+  return tmdb<{ episodes: Episode[]; name: string; overview: string }>(`/tv/${id}/season/${seasonNumber}`, {}, opts)
+}
+export const genreList = (type: MediaType, opts?: RequestOptions) =>
+  tmdb<{ genres: { id: number; name: string }[] }>(`/genre/${type}/list`, {}, opts).then((r) => {
+    const raw = asObject(r)
+    if (!Array.isArray(raw.genres)) throw new Error('TMDb returned an invalid genre list')
+    return raw.genres
+      .map((genre) => {
+        if (!genre || typeof genre !== 'object' || Array.isArray(genre)) return null
+        const item = genre as Record<string, unknown>
+        return Number.isSafeInteger(item.id) && typeof item.name === 'string'
+          ? { id: item.id as number, name: item.name.slice(0, 200) }
+          : null
+      })
+      .filter((genre): genre is { id: number; name: string } => genre !== null)
+  })
+
+export type PersonDetail = {
+  id: number
+  name: string
+  biography: string
+  birthday: string | null
+  deathday: string | null
+  place_of_birth: string | null
+  profile_path: string | null
+  known_for_department: string | null
+  popularity: number
+}
+
+export type PersonCredit = {
+  id: number
+  media_type?: MediaType
+  title?: string
+  name?: string
+  poster_path: string | null
+  character?: string
+  release_date?: string
+  first_air_date?: string
+  vote_average?: number
+  popularity?: number
+}
+
+export const person = (id: number, opts?: { signal?: AbortSignal }) => {
+  if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
+  return tmdb<PersonDetail>(`/person/${id}`, {}, opts)
+}
+
+export const personCredits = (id: number, opts?: { signal?: AbortSignal }) => {
+  if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
+  return tmdb<{ cast: PersonCredit[] }>(`/person/${id}/combined_credits`, {}, opts)
+}

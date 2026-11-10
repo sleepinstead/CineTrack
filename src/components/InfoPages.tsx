@@ -1,0 +1,148 @@
+import type { InfoSlug } from '../lib/route'
+import { SectionHead } from './ui'
+
+export type { InfoSlug } from '../lib/route'
+
+const INFO_LINKS: { slug: InfoSlug; label: string }[] = [
+  { slug: 'about', label: 'About' },
+  { slug: 'privacy', label: 'Privacy Policy' },
+  { slug: 'api', label: 'API Information' },
+  { slug: 'terms', label: 'Terms' },
+]
+
+const LAST_UPDATED = 'November 2026'
+
+/** Long-form informational pages linked from the footer. */
+export default function InfoPage({ slug, onBack }: { slug: InfoSlug; onBack: () => void }) {
+  const meta = INFO_LINKS.find((l) => l.slug === slug)
+  return (
+    <div className="space-y-8">
+      <SectionHead
+        title={meta?.label ?? 'Information'}
+        note={`Last updated ${LAST_UPDATED}`}
+        fullBleed
+        headingLevel={1}
+        right={
+          <button
+            type="button"
+            onClick={onBack}
+            className="press border border-border px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.14em] hover:border-[var(--foreground)] hover:bg-card"
+          >
+            ← Back
+          </button>
+        }
+      />
+      <article className="max-w-[68ch] space-y-6 text-[14px] leading-relaxed text-secondary-foreground">
+        {slug === 'about' && <About />}
+        {slug === 'privacy' && <Privacy />}
+        {slug === 'api' && <Api />}
+        {slug === 'terms' && <Terms />}
+      </article>
+    </div>
+  )
+}
+
+function H({ children }: { children: React.ReactNode }) {
+  return <h2 className="font-display text-[22px] leading-tight text-foreground">{children}</h2>
+}
+
+function About() {
+  return (
+    <>
+      <p>
+        CineTrack is a personal moving-image archive — a single place to catalogue the films and television you watch,
+        track individual episodes and seasons, log rewatches, and read back your own viewing statistics over time.
+      </p>
+      <H>What it does</H>
+      <p>
+        Search The Movie Database for any title, accession it to your library, and record status, personal ratings, and
+        the dates you watched. Series carry full season-and-episode state; every title supports a running rewatch log.
+        A discovery feed suggests new titles based on what you have already enjoyed.
+      </p>
+      <H>Where your data lives</H>
+      <p>
+        Everything you record is stored locally on your device. There is no remote account or third-party server holding your library.
+        You can export your library as a JSON file from Settings.
+      </p>
+    </>
+  )
+}
+
+function Privacy() {
+  return (
+    <>
+      <p>
+        CineTrack is built to collect as little as possible. This policy explains what data exists and where it is kept.
+      </p>
+      <H>Data stored locally</H>
+      <p>
+        Your library — titles, ratings, watch dates, episode progress, rewatches — and your preferences stay on your own device.
+        This data never leaves your machine unless you explicitly export it.
+      </p>
+      <H>Third-party requests</H>
+      <p>
+        Title metadata (search results, details, cast, and episodes) is fetched from The Movie Database (themoviedb.org)
+        through the local server, so TMDb sees the server&rsquo;s requests rather than your browser&rsquo;s. Posters and
+        stills load directly from TMDb&rsquo;s image servers (image.tmdb.org), which can see your IP address; no referrer
+        is sent with those requests. Both are subject to TMDb&rsquo;s own privacy policy.
+      </p>
+      <p>
+        Fonts are bundled with the app. CineTrack runs no analytics, advertising, or third-party trackers.
+      </p>
+      <H>Cookies</H>
+      <p>CineTrack sets no cookies. Your library and preferences are stored locally on your device.</p>
+      <H>Your control</H>
+      <p>
+        You can export a full backup, restore one, or erase your entire library from Settings at any time.
+      </p>
+    </>
+  )
+}
+
+function Api() {
+  return (
+    <>
+      <p>
+        CineTrack uses the public API provided by The Movie Database (TMDb) for title metadata, imagery, cast,
+        and season/episode data.
+      </p>
+      <H>Attribution</H>
+      <p>
+        This product uses the TMDb API but is not endorsed or certified by TMDb. All film and television metadata,
+        posters, and stills are © their respective owners and are served via TMDb.
+      </p>
+      <H>How the key is handled</H>
+      <p>
+        The TMDb API key is managed securely on the local backend server (configured via a <code>TMDB_KEY</code> environment variable or a gitignored <code>.env</code> file in the project root)
+        and proxied automatically. No credentials or API keys are exposed to the client or stored in the browser.
+      </p>
+      <H>Rate limits</H>
+      <p>
+        TMDb enforces its own request rate limits. If metadata fails to load, you may have exceeded those limits
+        temporarily; requests will resume automatically after a short wait.
+      </p>
+    </>
+  )
+}
+
+function Terms() {
+  return (
+    <>
+      <p>
+        CineTrack is provided as-is for personal, non-commercial use. By using it you agree to the terms below.
+      </p>
+      <H>Acceptable use</H>
+      <p>
+        Use CineTrack to catalogue your own viewing. Do not use it to redistribute TMDb data in violation of TMDb&rsquo;s
+        terms of use, and respect all applicable copyright in the metadata and imagery it displays.
+      </p>
+      <H>No warranty</H>
+      <p>
+        The application is offered without warranty of any kind. Metadata accuracy depends on TMDb, and your locally
+        stored data is your responsibility — export regularly if it matters to you.
+      </p>
+      <H>Changes</H>
+      <p>These terms may be updated as the application evolves; the date above reflects the most recent revision.</p>
+    </>
+  )
+}

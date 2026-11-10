@@ -1,0 +1,58 @@
+/*
+ * BACKUP — the original "Paper" light theme, preserved verbatim from
+ * src/index.css as it stood before the four-theme redesign.
+ *
+ * This file is NOT imported anywhere. To restore Paper, see README.md in
+ * this folder.
+ */
+
+:root {
+  --background: #ffffff;
+  --foreground: #14130f;
+  --card: #faf8f3;
+  --card-foreground: #14130f;
+  --primary: #7a2318;
+  --primary-foreground: #fdfbf6;
+  --secondary: #f0ede4;
+  --secondary-foreground: #3a3730;
+  --muted: #f5f3ed;
+  --muted-foreground: #74705f;
+  --accent: #7a2318;
+  --accent-foreground: #fdfbf6;
+  --destructive: #dc2626;
+  --destructive-foreground: #fdfbf6;
+  --toast-info: #1d4ed8;
+  --toast-success: #15803d;
+  --toast-warning: #a16207;
+  --toast-error: #b91c1c;
+  --toast-on: #ffffff;
+  --status-planned: #52525b;
+  --status-planned-foreground: #ffffff;
+  --status-watching: #2563eb;
+  --status-watching-foreground: #ffffff;
+  --status-watched: #15803d;
+  --status-watched-foreground: #ffffff;
+  --border: #e3ded1;
+  --ring: #7a2318;
+  --radius: 2px;
+  /* Status colours used as text on tinted chips (≥4.5:1 on the background). */
+  --status-planned-ink: #52525b;
+  --status-watching-ink: #1d4ed8;
+  --status-watched-ink: #166534;
+  --tooth: rgba(20, 19, 15, 0.045);
+}
+
+/* Derived tokens (unchanged from the original). */
+:root {
+  /* Form-control borders need 3:1 against the page (WCAG 1.4.11). */
+  --input: color-mix(in srgb, var(--foreground) 48%, var(--background));
+}
+
+/* Original body texture that Paper relied on. */
+body {
+  margin: 0;
+  overflow-anchor: none;
+  /* Faint paper tooth so the true-white ground reads as stock, not screen. */
+  background-image: radial-gradient(circle at 1px 1px, var(--tooth) 1px, transparent 0);
+  background-size: 4px 4px;
+}
