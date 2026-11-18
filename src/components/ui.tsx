@@ -764,7 +764,7 @@ export const Poster = memo(function Poster({
       <div
         ref={art.targetRef}
         data-poster-surface
-        className="poster-card-3d__art relative aspect-[2/3] w-full overflow-hidden bg-muted"
+        className="poster-card-3d__art relative aspect-[2/3] w-full overflow-hidden bg-card"
       >
         {art.hasArt && art.shouldLoad && art.status !== 'failed' && (
           <div
@@ -791,9 +791,9 @@ export const Poster = memo(function Poster({
               height={513}
               onLoad={art.onLoad}
               onError={art.onError}
-              className={`h-full w-full object-cover transition-[opacity,transform,filter] duration-300 ease-out ${
+              className={`h-full w-full object-contain transition-[opacity,transform,filter] duration-300 ease-out ${
                 art.status === 'ready' ? 'opacity-100' : 'opacity-0'
-              } ${posterMotion ? 'group-hover:scale-[1.03]' : ''} group-hover:brightness-110 group-hover:saturate-110`}
+              } group-hover:brightness-110 group-hover:saturate-110`}
             />
           ) : (
             <div aria-hidden="true" className="flex h-full items-center justify-center p-3 text-center font-sans text-xs text-muted-foreground">
@@ -855,21 +855,20 @@ export const Poster = memo(function Poster({
           tabIndex={-1}
           aria-hidden="true"
           onClick={() => onOpen(type, item.id, item)}
-          className="mt-2 flex w-full items-baseline justify-between gap-2 text-left"
+          className="flex w-full flex-col text-left"
         >
           <span
-            className={`truncate font-sans leading-tight transition-colors duration-200 group-hover:text-[var(--primary)] ${
-              compact ? 'text-[13px]' : 'text-[15px]'
+            className={`mt-3 line-clamp-2 font-sans leading-tight transition-colors duration-300 group-hover:text-[var(--primary)] ${
+              compact ? 'text-[13px]' : 'text-[13px] sm:text-[15px]'
             }`}
           >
             {titleOf(item)}
           </span>
-          <span className="font-sans text-[10px] tabular-nums text-muted-foreground transition-colors duration-300 group-hover:text-foreground">
-            {yearOf(item) || '—'}
+          <span className="rule-label mt-1.5 transition-colors duration-300 group-hover:text-foreground">
+            {type === 'movie' ? movieLabel : 'Series'} <span className="px-1 text-border">/</span> {yearOf(item) || '—'}
             {community && <span className="text-[var(--accent)]"> · ★ {community}</span>}
           </span>
         </button>
-        <div className="rule-label mt-0.5 transition-colors duration-300 group-hover:text-foreground">{type === 'movie' ? movieLabel : 'Series'}</div>
       </div>
     </PosterTilt>
   )
