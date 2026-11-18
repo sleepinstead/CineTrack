@@ -4,7 +4,7 @@ A personal film and TV tracker that runs entirely on your own machine. No accoun
 
 Most tracking apps turn movie-watching into a social feed filled with notifications, debates, and algorithms. CineTrack works like a personal cinema ledger: a simple, dependable notebook where you log what you have seen, track what is underway, and save what you want to watch next. Everything stays on your device.
 
-<!-- Screenshot: Home dashboard showing viewing stats, in-progress titles, and Feeling Lucky picks -->
+![CineTrack Home Dashboard](images/home.png)
 
 ## What you can do
 
@@ -15,7 +15,7 @@ Most tracking apps turn movie-watching into a social feed filled with notificati
 - **Tailor the presentation.** Switch between a light theme (Paper) and a dark theme (Noir), or follow your system preference.
 - **Own your data completely.** Back up your entire library and preferences to a single JSON file anytime, or restore it without losing existing entries.
 
-<!-- Screenshot: Title detail drawer showing season episodes, status, rating, and personal notes -->
+![CineTrack Library](images/library.png)
 
 ## How it works
 
@@ -23,7 +23,7 @@ CineTrack is a lightweight local web app. Your records are saved directly to a s
 
 Every change is saved safely using atomic file swaps, protecting your data if your computer shuts down unexpectedly. A fresh backup is also created whenever the server starts.
 
-<!-- Screenshot: Library grid view showing filters, search, and sorting options -->
+![CineTrack Title Details](images/title.png)
 
 ## Getting started
 
@@ -41,6 +41,8 @@ npm run dev
 ```
 
 Open [127.0.0.1:8443](http://127.0.0.1:8443) in your browser. To create an optimized production build, run `npm run build` followed by `npm run start`.
+
+![CineTrack Discover](images/discover.png)
 
 ## Built with
 
