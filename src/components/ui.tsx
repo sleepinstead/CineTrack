@@ -961,7 +961,7 @@ export function SearchInput({
   return (
     <div
       className={`group flex h-9 items-center gap-2.5 border bg-background px-3 transition-colors duration-200 ${
-        focused ? 'border-[var(--foreground)] ring-1 ring-[var(--foreground)]' : 'border-[var(--input)] hover:border-[var(--foreground)]'
+        focused ? 'border-[var(--foreground)]' : 'border-border hover:border-[var(--foreground)]'
       } ${className ?? ''}`}
     >
       <svg aria-hidden="true" viewBox="0 0 24 24" className="size-3.5 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
